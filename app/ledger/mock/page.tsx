@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Card, EmptyState, PageShell, SectionTitle } from "@/components/ui";
@@ -36,7 +37,15 @@ export default async function MockLedgerPage() {
                     />
                   </div>
                 </div>
-                <div className="text-sm text-slate">Hash: {record.messageHash}</div>
+                <div className="space-y-3 text-sm text-slate">
+                  <div>Hash: {record.messageHash}</div>
+                  <Link
+                    href={`/ledger/mock/${record.ledgerRecordId}`}
+                    className="inline-flex rounded-full border border-line px-4 py-2 text-sm font-medium transition hover:border-accent hover:text-accent"
+                  >
+                    View Record
+                  </Link>
+                </div>
               </div>
               <div className="mt-5 overflow-hidden rounded-2xl border border-line bg-ink p-4 text-xs text-slate-100">
                 <pre>{JSON.stringify(record.submittedPayload, null, 2)}</pre>

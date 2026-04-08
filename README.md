@@ -10,7 +10,8 @@ A clean, modular V1 web application that simulates how supply-chain provenance e
 - Transforms app events into an HCS-style event payload with the exact target shape defined for this prototype.
 - Submits those payloads to a mock ledger adapter that behaves like a future Hedera integration point.
 - Stores assets, events, documents, and mock ledger records locally in a JSON-backed repository.
-- Renders event history as a transparent audit timeline.
+- Renders each asset as a lifecycle-first audit screen with verification status, process integrity, risk flags, chain of custody, and ledger proof links.
+- Guides the next event workflow using current asset state so operators can move faster with fewer manual inputs.
 
 ## Architecture Overview
 
@@ -19,7 +20,7 @@ The app is structured as a foundation for a real product rather than a one-off d
 ### App layer
 
 - `app/`
-- App Router pages render dashboard, assets, event recording, document registry, and a mock ledger explorer.
+- App Router pages render dashboard, assets, event recording, document registry, a mock ledger explorer, and per-record proof views.
 - API routes expose asset, event, document, and ledger operations.
 
 ### Service layer
@@ -27,6 +28,12 @@ The app is structured as a foundation for a real product rather than a one-off d
 - `lib/services/`
 - Coordinates business workflows such as asset creation, event recording, payload preparation, and document creation.
 - Keeps business rules out of UI components and route handlers.
+
+### Domain analysis layer
+
+- `lib/domain/assetAudit.ts`
+- Derives lifecycle progression, verification status, process integrity, issue flags, chain of custody, next recommended action, and the timeline display model from recorded history.
+- Keeps interpretive audit logic reusable and testable outside the UI.
 
 ### Validation layer
 
@@ -67,6 +74,60 @@ The app is structured as a foundation for a real product rather than a one-off d
    - exact submitted payload
 6. The asset, event, optional document, and mock ledger record are persisted locally.
 7. The UI renders the resulting audit history and ledger traceability.
+
+## Lifecycle And Audit View
+
+The asset detail page is the flagship screen of the prototype and now provides:
+
+- A horizontal lifecycle tracker for `Created -> Certified -> Shipped -> Received -> Inspected`
+- Derived status cards for:
+  - current stage
+  - current custodian
+  - verification status
+  - process integrity
+  - documents attached
+- Issue and risk flagging for:
+  - missing certification
+  - skipped stage
+  - missing document hash
+  - stalled asset
+  - stored-state mismatch
+- A chain-of-custody section derived from custody transitions
+- An improved event timeline with actor, stage change, custody change, document status, timestamp, and ledger proof links
+
+If stored asset state conflicts with event-derived state, the page surfaces the discrepancy instead of hiding it.
+
+## Guided Next-Event Workflow
+
+The event recording flow is now guided by the selected asset's derived lifecycle state.
+
+- Launching from an asset page preselects the asset and suggested next event
+- Previous stage and previous custodian are prefilled automatically
+- The likely next lifecycle step is suggested based on recorded history
+- The form only shows the fields needed for the chosen event type
+- If lifecycle integrity issues block guidance, the form explains why instead of pretending the state is clean
+
+Examples:
+
+- `Created -> certificate_attached`
+- `Certified -> shipped`
+- `Shipped -> received`
+- `Received -> inspected`
+
+## Technical Proof Linkage
+
+Each event timeline item can link directly to a dedicated mock ledger record proof page.
+
+The proof page shows:
+
+- ledger record ID
+- status
+- network
+- topic ID
+- sequence number
+- consensus timestamp
+- message hash
+- the exact submitted payload JSON
 
 ## Local Persistence
 

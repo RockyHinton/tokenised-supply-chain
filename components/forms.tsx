@@ -5,11 +5,13 @@ import {
   FormEvent,
   InputHTMLAttributes,
   TextareaHTMLAttributes,
+  useEffect,
   useMemo,
   useState
 } from "react";
 
-import { Asset, EventType } from "@/lib/types";
+import { EventWorkflowAssetOption } from "@/lib/domain/assetAudit";
+import { EventType } from "@/lib/types";
 import { getExpectedTransition } from "@/lib/validation/lifecycleRules";
 
 type SubmitState = {
@@ -111,24 +113,55 @@ export function CreateAssetForm() {
 
 export function RecordEventForm({
   assets,
-  initialAssetId
+  initialAssetId,
+  initialEventType
 }: {
-  assets: Asset[];
+  assets: EventWorkflowAssetOption[];
   initialAssetId?: string;
+  initialEventType?: EventType;
 }) {
   const router = useRouter();
   const [selectedAssetId, setSelectedAssetId] = useState<string>(
-    initialAssetId ?? assets[0]?.id ?? ""
+    initialAssetId ?? assets[0]?.asset.id ?? ""
   );
-  const [eventType, setEventType] = useState<EventType>("certificate_attached");
+  const [eventType, setEventType] = useState<EventType>(initialEventType ?? "certificate_attached");
   const [state, setState] = useState<SubmitState>({ pending: false, error: null });
 
-  const selectedAsset = useMemo(
-    () => assets.find((asset) => asset.id === selectedAssetId) ?? null,
+  const selectedOption = useMemo(
+    () => assets.find((entry) => entry.asset.id === selectedAssetId) ?? null,
     [assets, selectedAssetId]
   );
+  const selectedAsset = selectedOption?.asset ?? null;
+
+  useEffect(() => {
+    if (!selectedOption) {
+      return;
+    }
+
+    const suggested = selectedOption.workflow.suggestedEventType;
+    setEventType((current) => {
+      if (
+        initialEventType &&
+        selectedOption.asset.id === initialAssetId
+      ) {
+        return initialEventType;
+      }
+
+      return suggested ?? current;
+    });
+  }, [initialAssetId, initialEventType, selectedOption]);
 
   const transition = getExpectedTransition(eventType);
+  const fromStage = selectedOption?.workflow.fromStage ?? transition.from;
+  const fromCustodian =
+    selectedOption?.workflow.fromCustodian ?? selectedOption?.asset.currentCustodian ?? null;
+  const toStage = transition.to;
+  const requiresCustodianChange = eventType === "shipped" || eventType === "received";
+  const requiresDocumentFields = eventType === "certificate_attached";
+  const showOptionalDocumentFields = eventType === "inspected";
+  const canSubmit = selectedOption
+    ? !selectedOption.workflow.integrityBlocked && Boolean(selectedOption.workflow.suggestedEventType)
+    : false;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -175,13 +208,32 @@ export function RecordEventForm({
           className="w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm outline-none transition focus:border-accent"
           required
         >
-          {assets.map((asset) => (
-            <option key={asset.id} value={asset.id}>
-              {asset.assetId} · {asset.name}
+          {assets.map((option) => (
+            <option key={option.asset.id} value={option.asset.id}>
+              {option.asset.assetId} · {option.asset.name}
             </option>
           ))}
         </select>
       </div>
+
+      {selectedOption ? (
+        <div className="md:col-span-2 rounded-2xl border border-line bg-mist/40 p-4">
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate">
+            Next Recommended Action
+          </p>
+          <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold">{selectedOption.workflow.suggestedActionLabel}</p>
+              <p className="text-sm text-slate">{selectedOption.workflow.guidance}</p>
+            </div>
+            <div className="text-sm text-slate">
+              Current state: {selectedOption.audit.lifecycle.currentStageLabel} ·{" "}
+              {selectedOption.audit.processIntegrity.label}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="space-y-2">
         <label className="text-sm font-medium text-ink">Event Type</label>
         <select
@@ -189,6 +241,7 @@ export function RecordEventForm({
           value={eventType}
           onChange={(event) => setEventType(event.target.value as EventType)}
           className="w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm outline-none transition focus:border-accent"
+          disabled={!selectedOption || selectedOption.workflow.integrityBlocked}
         >
           <option value="certificate_attached">certificate_attached</option>
           <option value="shipped">shipped</option>
@@ -199,40 +252,85 @@ export function RecordEventForm({
       <Input name="actorId" label="Actor ID" placeholder="logistics_001" required />
       <Input name="actorRole" label="Actor Role" placeholder="logistics" required />
       <Input name="locationName" label="Location" placeholder="Distribution Hub West" />
-      <Input
-        name="fromStage"
-        label="Previous Stage"
-        value={(selectedAsset?.currentStage ?? transition.from ?? "") as string}
-        readOnly
-      />
-      <Input name="toStage" label="New Stage" value={transition.to} readOnly />
-      <Input
-        name="fromCustodian"
-        label="Previous Custodian"
-        value={selectedAsset?.currentCustodian ?? ""}
-        readOnly
-      />
-      <Input name="toCustodian" label="New Custodian" placeholder="carrier_001" required />
+
+      <input type="hidden" name="fromStage" value={fromStage ?? ""} />
+      <input type="hidden" name="toStage" value={toStage} />
+      <input type="hidden" name="fromCustodian" value={fromCustodian ?? ""} />
+      {!requiresCustodianChange ? (
+        <input type="hidden" name="toCustodian" value={fromCustodian ?? ""} />
+      ) : null}
+
+      <ReadOnlyField label="Previous Stage" value={fromStage ?? "None"} />
+      <ReadOnlyField label="New Stage" value={toStage} />
+      <ReadOnlyField label="Previous Custodian" value={fromCustodian ?? "Not recorded"} />
+      {requiresCustodianChange ? (
+        <Input name="toCustodian" label="New Custodian" placeholder="carrier_001" required />
+      ) : (
+        <ReadOnlyField label="Next Custodian" value={fromCustodian ?? "No change"} />
+      )}
       <TextArea
         name="notes"
         label="Notes"
         placeholder="Add operational context for this event"
         className="md:col-span-2"
       />
-      <Input name="documentHash" label="Document Hash" placeholder="sha256:abc123example" />
-      <Input name="documentFilename" label="Document Filename" placeholder="inspection-report.pdf" />
-      <Input name="documentType" label="Document Type" placeholder="inspection_report" />
+
+      {requiresDocumentFields || showOptionalDocumentFields ? (
+        <>
+          <Input
+            name="documentHash"
+            label="Document Hash"
+            placeholder="sha256:abc123example"
+            required={requiresDocumentFields}
+          />
+          <Input
+            name="documentFilename"
+            label="Document Filename"
+            placeholder="inspection-report.pdf"
+            required={requiresDocumentFields}
+          />
+          <Input
+            name="documentType"
+            label="Document Type"
+            placeholder="certificate_of_origin"
+            required={requiresDocumentFields}
+          />
+        </>
+      ) : (
+        <>
+          <input type="hidden" name="documentHash" value="" />
+          <input type="hidden" name="documentFilename" value="" />
+          <input type="hidden" name="documentType" value="" />
+        </>
+      )}
+
+      {!canSubmit && selectedOption ? (
+        <p className="md:col-span-2 text-sm text-amber-700">
+          {selectedOption.workflow.guidance}
+        </p>
+      ) : null}
       {state.error ? <ErrorText message={state.error} /> : null}
       <div className="md:col-span-2">
         <button
           type="submit"
-          disabled={state.pending}
+          disabled={state.pending || !canSubmit}
           className="rounded-full bg-ink px-5 py-3 text-sm font-medium text-white transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-70"
         >
           {state.pending ? "Submitting..." : "Record Event"}
         </button>
       </div>
     </form>
+  );
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-2">
+      <span className="text-sm font-medium text-ink">{label}</span>
+      <div className="rounded-2xl border border-line bg-mist/30 px-4 py-3 text-sm text-slate">
+        {value}
+      </div>
+    </div>
   );
 }
 
