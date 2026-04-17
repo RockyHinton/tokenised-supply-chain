@@ -8,11 +8,13 @@ export const createAssetSchema = z.object({
   name: z.string().min(1, "Material or component name is required."),
   description: z.string().min(1, "Description is required."),
   originSupplier: z.string().min(1, "Origin supplier is required."),
+  originOrganisationId: z.string().min(1, "Origin organisation is required.").optional(),
   batchNumber: z.string().min(1, "Batch number is required."),
   initialCustodian: z.string().min(1, "Initial custodian is required."),
   actorId: z.string().min(1, "Actor ID is required."),
   actorRole: z.string().min(1, "Actor role is required."),
   locationName: z.string().min(1, "Location is required."),
+  locationId: z.string().min(1, "Location is required.").optional(),
   notes: z.string().trim().optional().default("")
 });
 
@@ -22,6 +24,7 @@ export const createEventSchema = z.object({
   actorId: z.string().min(1, "Actor ID is required."),
   actorRole: z.string().min(1, "Actor role is required."),
   locationName: z.string().trim().optional().default(""),
+  locationId: z.string().trim().optional().default(""),
   fromStage: z.enum(STAGES).nullable(),
   toStage: z.enum(STAGES),
   fromCustodian: z.string().trim().nullable(),

@@ -1,4 +1,4 @@
-import { index, pgTable, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { index, pgTable, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 
 import { organisations } from "@/lib/db/schema/organisations";
 import { createdAtColumn, idColumn, updatedAtColumn } from "@/lib/db/schema/shared";
@@ -7,7 +7,7 @@ export const locations = pgTable(
   "locations",
   {
     id: idColumn(),
-    organisationId: uuid("organisation_id")
+    organisationId: varchar("organisation_id", { length: 64 })
       .notNull()
       .references(() => organisations.id, { onDelete: "restrict", onUpdate: "cascade" }),
     name: varchar("name", { length: 256 }).notNull(),

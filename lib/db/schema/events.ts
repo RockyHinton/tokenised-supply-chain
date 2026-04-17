@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import { index, pgTable, text, varchar } from "drizzle-orm/pg-core";
 
 import { assets } from "@/lib/db/schema/assets";
 import { locations } from "@/lib/db/schema/locations";
@@ -10,35 +10,35 @@ export const events = pgTable(
   "events",
   {
     id: idColumn(),
-    assetId: uuid("asset_id")
+    assetId: varchar("asset_id", { length: 64 })
       .notNull()
       .references(() => assets.id, { onDelete: "cascade", onUpdate: "cascade" }),
     eventType: varchar("event_type", { length: 100 }).notNull(),
-    performedByUserId: uuid("performed_by_user_id").references(() => users.id, {
+    performedByUserId: varchar("performed_by_user_id", { length: 64 }).references(() => users.id, {
       onDelete: "set null",
       onUpdate: "cascade"
     }),
-    performedByOrganisationId: uuid("performed_by_organisation_id").references(
+    performedByOrganisationId: varchar("performed_by_organisation_id", { length: 64 }).references(
       () => organisations.id,
       {
         onDelete: "set null",
         onUpdate: "cascade"
       }
     ),
-    locationId: uuid("location_id").references(() => locations.id, {
+    locationId: varchar("location_id", { length: 64 }).references(() => locations.id, {
       onDelete: "set null",
       onUpdate: "cascade"
     }),
     fromStage: varchar("from_stage", { length: 100 }),
-    toStage: varchar("to_stage", { length: 100 }),
-    fromCustodianOrganisationId: uuid("from_custodian_organisation_id").references(
+    toStage: varchar("to_stage", { length: 100 }).notNull(),
+    fromCustodianOrganisationId: varchar("from_custodian_organisation_id", { length: 64 }).references(
       () => organisations.id,
       {
         onDelete: "set null",
         onUpdate: "cascade"
       }
     ),
-    toCustodianOrganisationId: uuid("to_custodian_organisation_id").references(
+    toCustodianOrganisationId: varchar("to_custodian_organisation_id", { length: 64 }).references(
       () => organisations.id,
       {
         onDelete: "set null",
@@ -46,8 +46,8 @@ export const events = pgTable(
       }
     ),
     notes: text("notes"),
-    appTimestamp: timestamp("app_timestamp", { withTimezone: true }).notNull(),
-    ledgerRecordId: uuid("ledger_record_id"),
+    appTimestamp: varchar("app_timestamp", { length: 64 }).notNull(),
+    ledgerRecordId: varchar("ledger_record_id", { length: 64 }),
     createdAt: createdAtColumn()
   },
   (table) => ({

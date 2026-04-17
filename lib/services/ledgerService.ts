@@ -1,16 +1,18 @@
 import { buildEventPayload } from "@/lib/events/buildEventPayload";
+import { getDb, type DbClient } from "@/lib/db/client";
 import { LedgerAdapter } from "@/lib/ledger/ledgerAdapter";
 import { MockLedgerAdapter } from "@/lib/ledger/mockLedgerAdapter";
+import { idRepository } from "@/lib/repositories/idRepository";
 import { ledgerRecordRepository } from "@/lib/repositories/ledgerRecordRepository";
-import { storeRepository } from "@/lib/repositories/storeRepository";
 import {
   Asset,
   DocumentRecord,
   EventRecord,
   HcsEventPayload,
-  MockLedgerSubmission,
-  StoreData
+  MockLedgerSubmission
 } from "@/lib/types";
+
+type DbExecutor = DbClient;
 
 export class LedgerService {
   constructor(private readonly adapter: LedgerAdapter) {}
@@ -24,21 +26,29 @@ export class LedgerService {
   }
 
   async submitPayload(payload: HcsEventPayload): Promise<MockLedgerSubmission> {
-    const store = await storeRepository.getStore();
-    const record = await this.createSubmissionRecord(payload, store);
-
-    store.ledgerRecords.push(record);
-    await storeRepository.saveStore(store);
+    const record = await this.createSubmissionRecord(payload);
+    await ledgerRecordRepository.create({
+      ...record,
+      eventId: record.submittedPayload.eventId
+    });
     return record;
   }
 
   async createSubmissionRecord(
     payload: HcsEventPayload,
-    store: StoreData
-  ): Promise<MockLedgerSubmission> {
+    options?: {
+      executor?: DbExecutor;
+      ledgerRecordId?: string;
+      sequenceNumber?: number;
+    }
+  ) {
     return this.adapter.submit(payload, {
-      ledgerRecordId: storeRepository.nextId(store, "ledger"),
-      sequenceNumber: storeRepository.nextSequence(store)
+      ledgerRecordId:
+        options?.ledgerRecordId ??
+        (await idRepository.nextLedgerRecordId(options?.executor)),
+      sequenceNumber:
+        options?.sequenceNumber ??
+        (await idRepository.nextLedgerSequence(options?.executor))
     });
   }
 
@@ -58,6 +68,10 @@ export class LedgerService {
 
   async getRecordById(id: string): Promise<MockLedgerSubmission | null> {
     return ledgerRecordRepository.getById(id);
+  }
+
+  async withTransaction<T>(callback: (tx: DbExecutor) => Promise<T>) {
+    return getDb().transaction(async (tx) => callback(tx as unknown as DbExecutor));
   }
 }
 

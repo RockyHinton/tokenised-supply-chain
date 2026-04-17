@@ -1,6 +1,7 @@
 import { RecordEventForm } from "@/components/forms";
 import { Card, EmptyState, PageShell } from "@/components/ui";
 import { assetService } from "@/lib/services/assetService";
+import { referenceDataService } from "@/lib/services/referenceDataService";
 import { EVENT_TYPES, EventType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,10 @@ export default async function NewEventPage({
 }: {
   searchParams?: Promise<{ assetId?: string; eventType?: string }>;
 }) {
-  const assets = await assetService.listAssetsForEventFlow();
+  const [assets, options] = await Promise.all([
+    assetService.listAssetsForEventFlow(),
+    referenceDataService.getFormOptions()
+  ]);
   const resolvedParams = searchParams ? await searchParams : undefined;
   const initialEventType = EVENT_TYPES.includes(resolvedParams?.eventType as EventType)
     ? (resolvedParams?.eventType as EventType)
@@ -32,6 +36,7 @@ export default async function NewEventPage({
         <Card>
           <RecordEventForm
             assets={assets}
+            options={options}
             initialAssetId={resolvedParams?.assetId}
             initialEventType={initialEventType}
           />

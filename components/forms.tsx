@@ -13,6 +13,11 @@ import {
 import { EventWorkflowAssetOption } from "@/lib/domain/assetAudit";
 import { EventType } from "@/lib/types";
 import { getExpectedTransition } from "@/lib/validation/lifecycleRules";
+import {
+  FormLocationOption,
+  FormOrganisationOption,
+  FormUserOption
+} from "@/lib/services/referenceDataService";
 
 type SubmitState = {
   pending: boolean;
@@ -28,18 +33,46 @@ async function postJson(url: string, body: unknown) {
     body: JSON.stringify(body)
   });
 
-  const data = await response.json();
+  const raw = await response.text();
+  let data: Record<string, unknown> = {};
+
+  if (raw) {
+    try {
+      data = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      data = {};
+    }
+  }
 
   if (!response.ok) {
-    throw new Error(data.error ?? "Request failed.");
+    const message = typeof data.error === "string" ? data.error : "Request failed.";
+    throw new Error(message);
   }
 
   return data;
 }
 
-export function CreateAssetForm() {
+export function CreateAssetForm({
+  options
+}: {
+  options: {
+    organisations: FormOrganisationOption[];
+    users: FormUserOption[];
+    locations: FormLocationOption[];
+  };
+}) {
   const router = useRouter();
   const [state, setState] = useState<SubmitState>({ pending: false, error: null });
+  const [originOrganisationId, setOriginOrganisationId] = useState(
+    options.organisations[0]?.id ?? ""
+  );
+  const [initialCustodian, setInitialCustodian] = useState(options.organisations[0]?.id ?? "");
+  const [actorId, setActorId] = useState(options.users[0]?.id ?? "");
+  const [locationId, setLocationId] = useState(options.locations[0]?.id ?? "");
+
+  const selectedOrigin = options.organisations.find((item) => item.id === originOrganisationId);
+  const selectedActor = options.users.find((item) => item.id === actorId);
+  const selectedLocation = options.locations.find((item) => item.id === locationId);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -53,11 +86,13 @@ export function CreateAssetForm() {
         name: form.get("name"),
         description: form.get("description"),
         originSupplier: form.get("originSupplier"),
+        originOrganisationId: form.get("originOrganisationId"),
         batchNumber: form.get("batchNumber"),
         initialCustodian: form.get("initialCustodian"),
         actorId: form.get("actorId"),
         actorRole: form.get("actorRole"),
         locationName: form.get("locationName"),
+        locationId: form.get("locationId"),
         notes: form.get("notes")
       });
       router.push("/assets");
@@ -78,12 +113,51 @@ export function CreateAssetForm() {
       <Input name="assetId" label="Asset ID" placeholder="RM-COCOA-003" required />
       <Input name="assetType" label="Asset Type" placeholder="raw_material_batch" required />
       <Input name="name" label="Material / Component Name" placeholder="Premium Cocoa Beans" required />
-      <Input name="originSupplier" label="Origin Supplier" placeholder="Kumasi Growers Cooperative" required />
+      <Select
+        name="originOrganisationId"
+        label="Origin Supplier"
+        value={originOrganisationId}
+        onChange={setOriginOrganisationId}
+        options={options.organisations.map((organisation) => ({
+          value: organisation.id,
+          label: `${organisation.name} (${organisation.id})`
+        }))}
+      />
       <Input name="batchNumber" label="Batch Number" placeholder="BATCH-003" required />
-      <Input name="initialCustodian" label="Initial Custodian" placeholder="supplier_003" required />
-      <Input name="actorId" label="Actor ID" placeholder="supplier_003" required />
-      <Input name="actorRole" label="Actor Role" placeholder="supplier" required />
-      <Input name="locationName" label="Location" placeholder="Supplier Warehouse B" required />
+      <Select
+        name="initialCustodian"
+        label="Initial Custodian"
+        value={initialCustodian}
+        onChange={setInitialCustodian}
+        options={options.organisations.map((organisation) => ({
+          value: organisation.id,
+          label: `${organisation.name} (${organisation.id})`
+        }))}
+      />
+      <Select
+        name="actorId"
+        label="Actor"
+        value={actorId}
+        onChange={setActorId}
+        options={options.users.map((user) => ({
+          value: user.id,
+          label: `${user.name} (${user.id})`
+        }))}
+      />
+      <ReadOnlyField label="Actor Role" value={selectedActor?.role ?? "Not available"} />
+      <Select
+        name="locationId"
+        label="Location"
+        value={locationId}
+        onChange={setLocationId}
+        options={options.locations.map((location) => ({
+          value: location.id,
+          label: `${location.name} (${location.id})`
+        }))}
+      />
+      <input type="hidden" name="originSupplier" value={selectedOrigin?.name ?? ""} />
+      <input type="hidden" name="actorRole" value={selectedActor?.role ?? ""} />
+      <input type="hidden" name="locationName" value={selectedLocation?.name ?? ""} />
       <TextArea
         name="description"
         label="Description"
@@ -113,10 +187,16 @@ export function CreateAssetForm() {
 
 export function RecordEventForm({
   assets,
+  options,
   initialAssetId,
   initialEventType
 }: {
   assets: EventWorkflowAssetOption[];
+  options: {
+    organisations: FormOrganisationOption[];
+    users: FormUserOption[];
+    locations: FormLocationOption[];
+  };
   initialAssetId?: string;
   initialEventType?: EventType;
 }) {
@@ -125,6 +205,9 @@ export function RecordEventForm({
     initialAssetId ?? assets[0]?.asset.id ?? ""
   );
   const [eventType, setEventType] = useState<EventType>(initialEventType ?? "certificate_attached");
+  const [actorId, setActorId] = useState<string>(options.users[0]?.id ?? "");
+  const [locationId, setLocationId] = useState<string>(options.locations[0]?.id ?? "");
+  const [toCustodian, setToCustodian] = useState<string>(options.organisations[0]?.id ?? "");
   const [state, setState] = useState<SubmitState>({ pending: false, error: null });
 
   const selectedOption = useMemo(
@@ -132,6 +215,8 @@ export function RecordEventForm({
     [assets, selectedAssetId]
   );
   const selectedAsset = selectedOption?.asset ?? null;
+  const selectedActor = options.users.find((user) => user.id === actorId);
+  const selectedLocation = options.locations.find((location) => location.id === locationId);
 
   useEffect(() => {
     if (!selectedOption) {
@@ -150,6 +235,14 @@ export function RecordEventForm({
       return suggested ?? current;
     });
   }, [initialAssetId, initialEventType, selectedOption]);
+
+  useEffect(() => {
+    if (!selectedOption) {
+      return;
+    }
+
+    setToCustodian(selectedOption.workflow.fromCustodian ?? options.organisations[0]?.id ?? "");
+  }, [options.organisations, selectedOption]);
 
   const transition = getExpectedTransition(eventType);
   const fromStage = selectedOption?.workflow.fromStage ?? transition.from;
@@ -175,6 +268,7 @@ export function RecordEventForm({
         actorId: form.get("actorId"),
         actorRole: form.get("actorRole"),
         locationName: form.get("locationName"),
+        locationId: form.get("locationId"),
         fromStage: form.get("fromStage") || null,
         toStage: form.get("toStage"),
         fromCustodian: form.get("fromCustodian") || null,
@@ -249,9 +343,29 @@ export function RecordEventForm({
           <option value="inspected">inspected</option>
         </select>
       </div>
-      <Input name="actorId" label="Actor ID" placeholder="logistics_001" required />
-      <Input name="actorRole" label="Actor Role" placeholder="logistics" required />
-      <Input name="locationName" label="Location" placeholder="Distribution Hub West" />
+      <Select
+        name="actorId"
+        label="Actor"
+        value={actorId}
+        onChange={setActorId}
+        options={options.users.map((user) => ({
+          value: user.id,
+          label: `${user.name} (${user.id})`
+        }))}
+      />
+      <ReadOnlyField label="Actor Role" value={selectedActor?.role ?? "Not available"} />
+      <Select
+        name="locationId"
+        label="Location"
+        value={locationId}
+        onChange={setLocationId}
+        options={options.locations.map((location) => ({
+          value: location.id,
+          label: `${location.name} (${location.id})`
+        }))}
+      />
+      <input type="hidden" name="actorRole" value={selectedActor?.role ?? ""} />
+      <input type="hidden" name="locationName" value={selectedLocation?.name ?? ""} />
 
       <input type="hidden" name="fromStage" value={fromStage ?? ""} />
       <input type="hidden" name="toStage" value={toStage} />
@@ -264,7 +378,16 @@ export function RecordEventForm({
       <ReadOnlyField label="New Stage" value={toStage} />
       <ReadOnlyField label="Previous Custodian" value={fromCustodian ?? "Not recorded"} />
       {requiresCustodianChange ? (
-        <Input name="toCustodian" label="New Custodian" placeholder="carrier_001" required />
+        <Select
+          name="toCustodian"
+          label="New Custodian"
+          value={toCustodian}
+          onChange={setToCustodian}
+          options={options.organisations.map((organisation) => ({
+            value: organisation.id,
+            label: `${organisation.name} (${organisation.id})`
+          }))}
+        />
       ) : (
         <ReadOnlyField label="Next Custodian" value={fromCustodian ?? "No change"} />
       )}
@@ -346,6 +469,39 @@ function Input({
         {...props}
         className="w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm outline-none transition focus:border-accent"
       />
+    </label>
+  );
+}
+
+function Select({
+  label,
+  value,
+  onChange,
+  name,
+  options
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  name: string;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <label className="block space-y-2">
+      <span className="text-sm font-medium text-ink">{label}</span>
+      <select
+        name={name}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm outline-none transition focus:border-accent"
+        required
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }

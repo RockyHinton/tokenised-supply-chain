@@ -1,9 +1,10 @@
-import { timestamp, uuid } from "drizzle-orm/pg-core";
+import { varchar } from "drizzle-orm/pg-core";
 
-export const idColumn = () => uuid("id").defaultRandom().primaryKey();
+export const idColumn = (name = "id", length = 64) =>
+  varchar(name, { length }).primaryKey();
 
 export const createdAtColumn = () =>
-  timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
+  varchar("created_at", { length: 64 }).notNull();
 
 export const updatedAtColumn = () =>
-  timestamp("updated_at", { withTimezone: true }).defaultNow().notNull();
+  varchar("updated_at", { length: 64 }).notNull();

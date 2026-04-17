@@ -1,4 +1,4 @@
-import { index, pgTable, text, uuid, varchar } from "drizzle-orm/pg-core";
+import { index, pgTable, text, varchar } from "drizzle-orm/pg-core";
 
 import { assets } from "@/lib/db/schema/assets";
 import { events } from "@/lib/db/schema/events";
@@ -9,17 +9,17 @@ export const documents = pgTable(
   "documents",
   {
     id: idColumn(),
-    assetId: uuid("asset_id")
+    assetId: varchar("asset_id", { length: 64 })
       .notNull()
       .references(() => assets.id, { onDelete: "cascade", onUpdate: "cascade" }),
-    eventId: uuid("event_id")
+    eventId: varchar("event_id", { length: 64 })
       .notNull()
       .references(() => events.id, { onDelete: "cascade", onUpdate: "cascade" }),
     documentType: varchar("document_type", { length: 100 }).notNull(),
     filename: varchar("filename", { length: 255 }).notNull(),
-    storagePath: text("storage_path").notNull(),
+    storagePath: text("storage_path").notNull().default(""),
     hash: varchar("hash", { length: 255 }).notNull(),
-    uploadedByUserId: uuid("uploaded_by_user_id").references(() => users.id, {
+    uploadedByUserId: varchar("uploaded_by_user_id", { length: 64 }).references(() => users.id, {
       onDelete: "set null",
       onUpdate: "cascade"
     }),
